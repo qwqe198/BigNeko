@@ -2355,5 +2355,170 @@ var plugins_bb40132b_638b_4a9f_b028_d3fe47acc8d1 =
 		core.insertAction(actions);
 		//console.log(actions)
 	}
+},
+    "血瓶数值显示": function () {
+	// 在此增加新插件
+	/* 宝石血瓶左下角显示数值
+	 * 需要将 变量：itemDetail2改为true才可正常运行
+	 * 请尽量减少勇士的属性数量，否则可能会出现严重卡顿
+	 * 注意：这里的属性必须是core.status.hero里面的，flag无法显示
+	 * 如果不想显示，可以core.setFlag("itemDetail2", false);
+	 * 然后再core.getItemDetail();
+	 * 如有bug在大群或造塔群@古祠
+	 */
+
+	// 谁tm在即捡即用效果里面调用带有含刷新状态栏的函数
+	var origin = core.control.updateStatusBar;
+	core.updateStatusBar = core.control.updateStatusBar = function () {
+		if (core.getFlag('__statistics__')) return;
+		else return origin.apply(core.control, arguments);
+	}
+
+	core.bigmap.threshold = 256;
+
+	core.control.updateDamage = function (floorId, ctx) {
+		floorId = floorId || core.status.floorId;
+		if (!floorId || core.status.gameOver || main.mode != 'play') return;
+		var onMap = ctx == null;
+
+		// 没有怪物手册
+		if (!core.hasItem('book')) return;
+		core.status.damage.posX = core.bigmap.posX;
+		core.status.damage.posY = core.bigmap.posY;
+		if (!onMap) {
+			var width = core.floors[floorId].width,
+				height = core.floors[floorId].height;
+			// 地图过大的缩略图不绘制显伤
+			if (width * height > core.bigmap.threshold) return;
+		}
+		this._updateDamage_damage(floorId, onMap);
+		this._updateDamage_extraDamage(floorId, onMap);
+		core.getItemDetail(floorId); // 宝石血瓶详细信息
+		this.drawDamage(ctx);
+	};
+	// 绘制地图显示
+	control.prototype._drawDamage_draw = function (ctx, onMap) {
+		if (!core.hasItem('book')) return;
+		// *** 下一句话可以更改你想要的显示字体
+		core.setFont(ctx, "bold 11px Arial");
+		// ***
+		core.setTextAlign(ctx, 'left');
+		core.status.damage.data.forEach(function (one) {
+			var px = one.px,
+				py = one.py;
+			if (onMap && core.bigmap.v2) {
+				px -= core.bigmap.posX * 32;
+				py -= core.bigmap.posY * 32;
+				if (px < -32 * 2 || px > core.__PX__ + 32 || py < -32 || py > core.__PY__ + 32)
+					return;
+			}
+			core.fillBoldText(ctx, one.text, px, py, one.color);
+		});
+		core.setTextAlign(ctx, 'center');
+		core.status.damage.extraData.forEach(function (one) {
+			var px = one.px,
+				py = one.py;
+			if (onMap && core.bigmap.v2) {
+				px -= core.bigmap.posX * 32;
+				py -= core.bigmap.posY * 32;
+				if (px < -32 || px > core.__PX__ + 32 || py < -32 || py > core.__PY__ + 32)
+					return;
+			}
+			core.fillBoldText(ctx, one.text, px, py, one.color);
+		});
+	};
+	// 获取宝石信息 并绘制
+	this.getItemDetail = function (floorId) {
+		if (!core.getFlag("itemDetail2")) return;
+		floorId = floorId || core.status.thisMap.floorId;
+		core.status.maps[floorId].blocks.forEach(function (block) {
+			if (block.event.cls !== 'items' || block.event.id === 'superPotion') return;
+			var x = block.x,
+				y = block.y;
+			// v2优化，只绘制范围内的部分
+			if (core.bigmap.v2) {
+				if (x < core.bigmap.posX - core.bigmap.extend || x > core.bigmap.posX + core.__SIZE__ + core.bigmap.extend ||
+					y < core.bigmap.posY - core.bigmap.extend || y > core.bigmap.posY + core.__SIZE__ + core.bigmap.extend) {
+					return;
+				}
+			}
+			var id = block.event.id;
+			var item = core.material.items[id];
+			if (item.cls === 'equips') {
+				// 装备也显示
+				var diff = core.clone(item.equip.value || {});
+				var per = item.equip.percentage;
+				for (var name in per) {
+					diff[name + 'per'] = per[name].toString() + '%';
+				}
+				drawItemDetail(diff, x, y);
+				return;
+			}
+			var before = core.clone(core.status.hero);
+			//跟数据统计原理一样 执行效果前后比较
+			core.setFlag("__statistics__", true);
+			try {
+				eval(item.itemEffect);
+			} catch (error) {}
+			var diff = compareObject(before, core.status.hero);
+			core.status.hero = hero = before;
+			flags = core.status.hero.flags;
+			drawItemDetail(diff, x, y);
+		});
+	};
+	// 比较两个对象之间每一项的数值差异（弱等于） 返回数值差异
+	function compareObject(a, b) {
+		a = a || {};
+		b = b || {};
+		var diff = {}; // 差异
+		for (var name in a) {
+			diff[name] = b[name] - (a[name] || 0);
+			if (!diff[name]) diff[name] = void 0;
+		}
+		return diff;
+	};
+	// 绘制
+	function drawItemDetail(diff, x, y) {
+		var px = 32 * x + 2,
+			py = 32 * y + 30;
+		var content = "";
+		// 获得数据和颜色
+		var i = 0;
+		for (var name in diff) {
+			if (!diff[name]) continue;
+			var color = "#ffffff";
+			if (typeof diff[name] === 'number')
+				diff[name] = core.formatBigNumber(diff[name], true);
+			switch (name) {
+			case 'atk':
+			case 'atkper':
+				color = "#FF7A7A";
+				break;
+			case 'def':
+			case 'defper':
+				color = "#00E6F1";
+				break;
+			case 'mdef':
+			case 'mdefper':
+				color = "#6EFF83";
+				break;
+			case 'hp':
+				color = "#A4FF00";
+				break;
+			case 'hpmax':
+			case 'hpmaxper':
+				color = "#F9FF00";
+				break;
+			case 'mana':
+				color = "#cc6666";
+				break;
+			}
+			content = diff[name];
+			// 绘制
+			core.status.damage.data.push({ text: content, px: px, py: py - 10 * i, color: color });
+			i++;
+		}
+	}
+	//  执行效果 前后比较
 }
 }

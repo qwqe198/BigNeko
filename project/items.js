@@ -762,6 +762,48 @@ var items_296f5d02_12fd_4166_a7c1_b5e830c9ee3a =
 								"value": "false"
 							}
 						]
+					},
+					{
+						"text": "开启资源数值显示",
+						"color": [
+							255,
+							255,
+							0,
+							1
+						],
+						"action": [
+							"资源数值显示已开启！",
+							{
+								"type": "setValue",
+								"name": "flag:itemDetail2",
+								"value": "true"
+							},
+							{
+								"type": "function",
+								"function": "function(){\ncore.plugin.getItemDetail();\n}"
+							}
+						]
+					},
+					{
+						"text": "关闭资源数值显示",
+						"color": [
+							229,
+							0,
+							255,
+							1
+						],
+						"action": [
+							"资源数值显示已关闭！",
+							{
+								"type": "setValue",
+								"name": "flag:itemDetail2",
+								"value": "false"
+							},
+							{
+								"type": "function",
+								"function": "function(){\ncore.plugin.getItemDetail();\n}"
+							}
+						]
 					}
 				]
 			}
